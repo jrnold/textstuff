@@ -12,5 +12,5 @@ setup(name='textstuff',
           "pandas",
           "spacy",
           "textacy"
-      ]
+          ],
       zip_safe=False)
