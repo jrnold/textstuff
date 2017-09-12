@@ -9,8 +9,9 @@ setup(name='textstuff',
       license='MIT',
       packages=['textstuff'],
       install_requires=[
-          "pandas",
+          "email_normalize",
           "spacy",
-          "textacy"
+          "textacy",
+          "tldextract"
           ],
       zip_safe=False)

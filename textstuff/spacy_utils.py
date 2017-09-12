@@ -1,18 +1,9 @@
-""" Some functions to make working with Spacy documents easier
-
-"""
-import itertools
-from functools import partial
-from types import GeneratorType
-from heapq import merge
-from operator import attrgetter
-import os.path
 import logging
-import json
+from operator import attrgetter
 
-import spacy
-import pandas as pd
-from spacy.tokens import Doc, Token, Span
+from spacy.tokens import Doc
+
+LOGGER = logging.getLogger(__name__)
 
 
 ENTITIES_TIME = ("DATE", "TIME")
@@ -34,20 +25,24 @@ FUNCTION_POS = ("ADP", "AUX", "CONJ", "DET", "INTJ", "PRON", "PART", "PRON",
 OPEN_CLASS_POS = ("ADJ", "ADV", "INTJ", "NOUN", "PROPN", "VERB")
 """ Open Class Word POS Tags
 
-POS corresponding to open class words in the [Universal Part of Speech Tags](http://universaldependencies.org/u/pos/)
+POS corresponding to open class words in the
+ [Universal Part of Speech Tags](http://universaldependencies.org/u/pos/)
 """
 
-CLOSED_CLASS_POS = ("ADP", "AUX", "CONJ", "DET", "NUM", "PART", "PRON", "SCONJ")
+CLOSED_CLASS_POS = ("ADP", "AUX", "CONJ", "DET", "NUM", "PART", "PRON",
+                    "SCONJ")
 """ Open Class Word POS Tags
 
-POS corresponding to closed class words in the [Universal Part of Speech Tags](http://universaldependencies.org/u/pos/)
+POS corresponding to closed class words in the
+ [Universal Part of Speech Tags](http://universaldependencies.org/u/pos/)
 """
 
 # Others
 OTHER_POS = ("PUNCT", "SYM", "X")
 """ Non Open or Closed Class POS Tags
 
-POS corresponding to closed class words in the [Universal Part of Speech Tags](http://universaldependencies.org/u/pos/)
+POS corresponding to closed class words in the
+[Universal Part of Speech Tags](http://universaldependencies.org/u/pos/)
 """
 
 
@@ -149,38 +144,6 @@ def tok_sent(tok):
     return sents[0] if len(sents) else None
 
 
-def text_with_ws(tok, lemma=False, lower=False):
-    """ Return text with whitespace
-
-    Like the `text_with_ws` property for :py:class:`~spacy.tokens.Token.Token`,
-    but with more options.
-
-    Parameters
-    -----------
-    tok : :py:class:`~spacy.tokens.Token`
-        Token object
-    lemma : bool
-        If ``True``, then the non-whitespace text is :py:meth:`~spacy.tokens.Token.lemma_`.
-    lower : bool
-        If ``True`` and  ``lemma=False` then the non-whitespace text is :py:meth:`~spacy.token.Token.lower_`.
-
-    Returns
-    --------
-    str
-        The token's text, including trailing whitespace.
-
-    """  # noqa
-    if lemma:
-        text = tok.lemma_
-    elif lower:
-        text = tok.lower_
-    else:
-        text = tok.text
-    return text + whitespace_
-
-lemma_with_ws = partial(text_with_ws, lemma=True, lower=True)
-lower_with_ws = partial(text_with_ws, lemma=False, loewr=True)
-
 def remove_leading(predicate, span):
     """ Remove leading tokens from a span
 
@@ -199,69 +162,105 @@ def remove_leading(predicate, span):
         A SpaCy span without the leading tokens that matched the predicate.
 
     """
-    while fun(span[0]):
+    while predicate(span[0]):
         span = span[1:]
     if len(span) > 0:
         return span
 
-def remove_det(span):
-    """ Remove leading determiner from a span
+
+def remove_trailing(predicate, span):
+    """ Remove trailing tokens from a span
+
+    Drop trailing tokens from a span as long as the predicate is true.
 
     Parameters
     -----------
+    predicate: callable
+        A callable that returns ``True`` if the token is to be dropped.
     span: :py:class:`~spacy.tokens.Span`
-        SpaCy Span
+        A SpaCy span.
 
     Returns
-    -------
-    :py:class:`~spacy.tokens.Span`
-        SpaCy span without the leading determiner
-
-    """
-    # doesn't consider if > 1 determiners, or if only determiner
-    if span[0].pos_ != "DET":
-        return span
-    else:
-        return Span(span.doc, span.start + 1, span.end)
-
-# From itertools package documentation
-def _flatten(listOfLists):
-    "Flatten one level of nesting"
-    return itertools.chain.from_iterable(listOfLists)
-
-def span_chunks(doc, spans=[], function=None):
-    """ Partition document into spans given list of span chunks
-
-    Given a list of spans, return a partition of spans that includes
-    all tokens in the document. The primary use is to iterate over
-    spans including named entities without formally merging them.
-    The returns spans will include the original set of spans,
-    as well as a one token span for any token not included in the orginal spans.
-    This also allows filtering on the tokens not in the spans.
-
-    Parameters
-    ----------
-    doc : :py:class:`~spacy.tokens.Doc`
-        Spacy document to partition into chunks
-    spans : iterable of :py:class:`~spacy.tokens.Span`
-        List of existing (and non-overlapping spans)
-    function : function
-        Function that filters tokens to include in the returned
-        spans (only for those tokens not in the ``spans`` argument).
-        It should take one argument, which is a :py:class:`~spacy.tokens.Token` object.
-
-    Yields
     --------
     :py:class:`~spacy.tokens.Span`
-        Iterates through the spans in order
+        A SpaCy span without the leading tokens that matched the predicate.
 
     """
-    # if spans is an iterator best to not allow it to be exhausted
-    spans = sorted(spans)
-    span_toks = set(_flatten(spans))
-    # this will be sorted
-    other_spans = (Span(doc, t.i, t.i + 1) for
-                        t in filter(function, doc)
-                        if t not in span_toks)
-    # Can use this because both spans and other_spans are sorted
-    return merge(spans, other_spans, key=attrgetter("start"))
+    while predicate(span[-1]):
+        span = span[:-1]
+    if len(span) > 0:
+        return span
+
+
+def spans_overlap(x, y):
+    """ Check if two spans overlap
+
+    Parameters
+    ------------
+    x, y: :class:`spacy.tokens.Span`
+        Spacy spans
+
+    Returns
+    --------
+    bool
+        ``True`` if the spans overlap, ``False`` otherwise.
+
+    """
+    return not (x.end > y.start or x.start > y.end)
+
+
+def filter_overlapping_spans(spans):
+    """ Remove overlapping Spans
+
+
+    Parameters
+    -----------
+    spans: ``iterable`` of :class:`spacy.token.Span`
+        An iterable of spans.
+
+    Yield
+    -------
+    :class:`spacy.token.Span`
+        An iterable of spans. Only non-overlapping spans are
+        returned, with earlier spans taking precedence,
+        after sorting the spans in increasing order.
+    """
+    i = -1
+    for span in sorted(spans, attrgetter("start")):
+        if span.start > i:
+            yield span
+            i = span.end
+
+
+def merge_entities(doc):
+    """ Merge entities in-place
+
+    Parameters
+    -----------
+    doc: :py:class:`~spacy.tokens.Doc`
+        Merge named entities into tokens, in place.
+    """
+    for ent in doc.ents:
+        try:
+            ent.merge(ent.root.tag_,
+                      ent.text,
+                      ent.root.ent_type_)
+        except IndexError as e:
+            LOGGER.exception("Unable to merge entity \"%s\"; skipping...",
+                             ent.text)
+
+
+def merge_noun_chunks(doc):
+    """ Merge noun chunks in-place
+
+    Parameters
+    -----------
+    doc: :py:class:`~spacy.tokens.Doc`
+        Merge named entities into tokens, in place.
+    """
+    for np in doc.noun_chunks:
+        try:
+            np.merge(np.root.tag_, np.text, np.root.ent_type_)
+        except IndexError as e:
+            LOGGER.exception("Unable to merge noun chunk \"%s\"; skipping ...",
+                             np.text)
