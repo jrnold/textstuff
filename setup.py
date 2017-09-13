@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='textstuff',
-      version='0.0.1',
+      version='0.0.2',
       description='Miscellaneous functions for dealing with text data',
       url='http://github.com/jrnold/textstuff',
       author='Jeffrey B. Arnold',
