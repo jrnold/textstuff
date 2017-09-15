@@ -2,13 +2,17 @@ import logging
 from operator import attrgetter
 import pickle
 
-from spacy import attrs
+import spacy
 from spacy.tokens import Doc
 
 LOGGER = logging.getLogger(__name__)
 
-_SAVED_ATTRS = [attrs.HEAD, attrs.DEP, attrs.TAG, attrs.ENT_TYPE,
-                attrs.ENT_IOB]
+DEFAULT_ATTRS = [spacy.attrs.HEAD,
+                 spacy.attrs.DEP,
+                 spacy.attrs.TAG,
+                 spacy.attrs.ENT_TYPE,
+                 spacy.attrs.ENT_IOB]
+""" Attributes needed to reconstruct a SpaCy parse """
 
 ENTITIES_TIME = ("DATE", "TIME")
 """ Time entities recognized by Spacy """
@@ -270,33 +274,41 @@ def merge_noun_chunks(doc):
                              np.text)
 
 
-def _doc_to_attrs(doc):
+def doc_to_tuple(doc, attrs=None):
+    """ Convert a SpaCy Document to a tokens, whitespac, attributes, array tuple
+
+    The SpaCy document can be reconstructed from this information. It's also
+    safer than the serialization method for SpaCy < 2.0.0, which has issues
+    with unknown characters.
+    See this `issue <https://github.com/explosion/spaCy/issues/927>`__ for
+    more information.
+
+    The primary purpose of this function is to serialize SpaCy parsed docsuments.
+    SpaCy 2.0.0 introduces a new serialization method, at which point this will
+    be obsolete.
+    """  # noqa
+    attrs = attrs or DEFAULT_ATTRS
     tokens = list(tok.text for tok in doc)
     whitespace = list(len(tok.whitespace_) > 0 for tok in doc)
-    return (tokens, whitespace, doc.to_array(_SAVED_ATTRS))
+    return (tokens, whitespace, attrs, doc.to_array(attrs))
 
 
 def dump_doc(doc, file):
     """ Pickle a :py:class:``~spacy.tokens.Doc` to an open file object ``file``
-
-    This pickles the Doc object using the tokens and some attributes.
-    This serialization method was suggested in this `issue <https://github.com/explosion/spaCy/issues/927>`__
-    in order to avoid problems in deserialization with unknown characters.
-
-    SpaCy 2.0.0 introduces a new serialization method, at which point this will
-    be obsolete.
-
     """  # noqa
-    return pickle.dump(_doc_to_attrs(doc), file)
+    return pickle.dump(doc_to_tuple(doc), file)
 
 
 def dumps_doc(doc):
     """ Pickle a :py:class:``~spacy.tokens.Doc` to a byte string """
-    return pickle.dumps(_doc_to_attrs(doc))
+    return pickle.dumps(doc_to_tuple(doc))
 
 
-def _doc_from_attrs(vocab, tokens, whitespace, array):
-    return Doc(vocab, tokens, whitespace).from_array(_SAVED_ATTRS, array)
+def doc_from_tuple(vocab, x):
+    """ SpaCy document from vocab and tokens, whitespace, attributes, array tuple
+    """  # noqa
+    tokens, whitespace, attrs, array = x
+    return Doc(vocab, tokens, whitespace).from_array(attrs, array)
 
 
 def load_doc(vocab, file):
@@ -315,9 +327,9 @@ def load_doc(vocab, file):
         A SpaCy document
 
     """  # noqa
-    return _doc_from_attrs(vocab, *pickle.load(file))
+    return doc_from_tuple(vocab, *pickle.load(file))
 
 
 def loads_doc(vocab, bytes_object):
     """ Load a picked :py:class:``~spacy.tokens.Doc` from a ``bytes`` object. """  # noqa
-    return _doc_from_attrs(vocab, *pickle.loads(bytes_object))
+    return doc_from_tuple(vocab, *pickle.loads(bytes_object))

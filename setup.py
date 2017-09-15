@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='textstuff',
-      version='0.0.3',
+      version='0.0.4',
       description='Miscellaneous functions for dealing with text data',
       url='http://github.com/jrnold/textstuff',
       author='Jeffrey B. Arnold',
@@ -10,7 +10,7 @@ setup(name='textstuff',
       packages=['textstuff'],
       install_requires=[
           "email_normalize",
-          "spacy",
+          "spacy>=1.9.0",
           "textacy",
           "tldextract"
           ],
