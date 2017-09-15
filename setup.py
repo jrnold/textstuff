@@ -10,6 +10,7 @@ setup(name='textstuff',
       packages=['textstuff'],
       install_requires=[
           "email_normalize",
+          "furl",
           "spacy>=1.9.0",
           "textacy",
           "tldextract"
