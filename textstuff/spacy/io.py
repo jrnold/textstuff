@@ -7,10 +7,16 @@ from spacy.tokens import Doc
 
 
 _DEFAULT_ATTRS = [
-    spacy.attrs.HEAD, spacy.attrs.DEP, spacy.attrs.TAG, spacy.attrs.ENT_TYPE,
-    spacy.attrs.ENT_IOB
+    # spacy.attrs.ORTH,
+    # spacy.attrs.SPACY,
+    spacy.attrs.HEAD,
+    spacy.attrs.TAG,
+    spacy.attrs.ENT_IOB,
+    spacy.attrs.ENT_TYPE,
+    spacy.attrs.DEP
 ]
 """ Attributes needed to reconstruct a SpaCy parse """
+# See https://github.com/explosion/spaCy/issues/1045
 
 
 def doc_to_tuple(doc, attrs=None):

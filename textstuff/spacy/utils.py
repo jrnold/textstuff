@@ -77,77 +77,96 @@ def doc_copy(doc):
     return Doc(doc.vocab).from_bytes(doc.to_bytes())
 
 
-def tok_spans(tok, spans):
+def find_spans(tok, spans):
     """Get any spans in which a token appears.
 
     Parameters
     ----------
-    tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+    tok: :class:`spacy.tokens.Token`, :class:`spacy.token.Span`
+        A SpaCy token or span. If ``tok`` is a span, then its root token is
+        used.
     spans: iterable
         An iterable yielding :py:class:`~spacy.tokens.Span` objects
 
     Yields
     --------
-    :py:class:`~spacy.tokens.Span`
-        The spans from `spans` in which the token appears, if any.
+    list of (int, :class:`spacy.tokens.Span`)
+        A tuple with the span number and span object in which the
+        token appears.
 
     """
-    return (span for span in spans if tok in span)
+    if isinstance(tok, Span):
+        tok = tok.root
+    return [(i, span) for i, span in enumerate(spans) if tok in span]
 
 
-def tok_ent(tok):
-    """Get the entity in which a token appears.
+def find_end(tok):
+    """Find the named entity span in which a token appears.
 
     Parameters
     ----------
-    tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+    tok: :class:`spacy.tokens.Token`, :class:`spacy.token.Span`
+        A SpaCy token or span. If ``tok`` is a span, then its root token is
+        used.
 
     Returns
     --------
-    :py:class:`~spacy.tokens.Span` or ``None``
-        The entity span in which the token appears, if any.
+    (int, :class:`spacy.tokens.Span`) or None
+        A tuple with the span number and mamed entity span which the
+        token appears. If the token is not in a named entity, then this
+        function returns ``None``.
 
     """
-    ents = list(tok_spans(tok, tok.doc.ents))
-    return ents[0] if len(ents) else None
+    if tok.ent_iob_ == "O":
+        return None
+    else:
+        return list(find_spans(tok, tok.doc.ents))[0]
 
 
-def tok_noun_chunk(tok):
-    """Get noun-chunk (if any) in which the token appears.
+def find_noun_chunk(tok):
+    """Find the noun-chunk in which a token appears.
 
     Parameters
     ----------
-    tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+    tok: :class:`spacy.tokens.Token`, :class:`spacy.token.Span`
+        A SpaCy token or span. If ``tok`` is a span, then its root token is
+        used.
 
     Returns
     --------
-    :py:class:`~spacy.tokens.Span` or ``None``
-        The noun chunk span in which the token appears, if any.
+    (int, :class:`spacy.tokens.Span`) or None
+        A tuple with the span number and moun chunk span which the
+        token appears. If the token is not in a noun chunk, then this
+        function returns ``None``.
 
     """
-    np = list(tok_spans(tok, tok.doc.noun_chunks))
-    return np[0] if len(np) else None
+    try:
+        return list(find_spans(tok, tok.doc.noun_chunks))[0]
+    except IndexError:
+        pass
 
 
-def tok_sent(tok):
-    """Get the sentence in which the token appears.
+def find_sent(tok):
+    """Find the sentence in which the token appears.
 
     Parameters
     ----------
-    tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+    tok: :class:`spacy.tokens.Token`, :class:`spacy.token.Span`
+        A SpaCy token or span. If ``tok`` is a span, then its root token is
+        used.
 
     Returns
     --------
-    :py:class:`~spacy.tokens.Span` or ``None``
-        The sentence span in which the token appears.
+    (int, :class:`spacy.tokens.Span`) or None
+        A tuple with the sentence number and sentence span in which the
+        token appears. If the token is not in a noun chunk, then this
+        function returns ``None``.
 
     """
-    sents = list(tok_spans(tok, tok.doc.sents))
-    return sents[0] if len(sents) else None
+    try:
+        return list(find_spans(tok, tok.doc.sents))[0]
+    except IndexError:
+        pass
 
 
 def remove_leading(predicate, span):
@@ -315,3 +334,41 @@ def span_diff(x, y):
         return x
     else:
         return Span(x.doc, max(x.start, y.start), min(x.end, y.end))
+
+
+def tokens_to_span(tokens, contiguous=True):
+    """Return a span incorporating all tokens."""
+    # assumed but not checked that all tokens are from the same doc
+    start = min((tok.i for tok in tokens))
+    end = max((tok.i for tok in tokens)) + 1
+    # check all tokens are contiguous
+    if contiguous:
+        # use set to ensure tha they are unique indices
+        tokens = sorted(list(set(tokens)), lambda x: x.i)
+        # by pigeon hole - only need to check the size to see that they're all
+        # there
+        if len(tokens) < (start - end + 1):
+            return None
+    return Span(tokens[0].doc, start, end)
+
+
+def tokens_to_spans(tokens):
+    """Yield spans of contiguous tokens from an iterable of tokens."""
+    # The document is finite, so I can assume that the iterable is ...?
+    # assumed but not checked that all tokens are from the same doc
+    toks = sorted(list(set(tokens)), lambda x: x.i)
+    last_i = None
+    start = None
+    end = None
+    for tok in toks:
+        if start is None:
+            start = tok.i
+            end = tok.i
+        else:
+            if tok.i - last_i == 1:
+                end = tok.i
+            else:
+                yield Span(tok.doc, start, end + 1)
+                start = tok.i
+                end = tok.i
+    return Span(tok.doc, start, end + 1)

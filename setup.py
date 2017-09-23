@@ -12,7 +12,7 @@ setup(name='textstuff',
       author='Jeffrey B. Arnold',
       author_email='jeffrey.arnold@gmail.com',
       license='MIT',
-      packages=['textstuff'],
+      packages=['textstuff', 'textstuff.spacy'],
       install_requires=[
           "email_normalize",
           "furl",
@@ -20,4 +20,5 @@ setup(name='textstuff',
           "textacy",
           "tldextract"
           ],
+      python_requires='>=3.6',
       zip_safe=False)

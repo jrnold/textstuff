@@ -9,7 +9,7 @@ _CAMEL_CASE_PATTERN = r".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)"
 
 
 def normalize_email(email):
-    """ Normalize an email
+    """Normalize an email.
 
     Parameters
     ------------
@@ -26,16 +26,17 @@ def normalize_email(email):
 
 
 def url_domain(url):
-    """ Domain of a url """
+    """Return the domain of a url."""
     return '.'.join(tldextract.extract(url)[1:])
 
 
 def url_tld(url):
-    """ top-level domain of a url """
+    """Return the top-level domain of a url."""
     return tldextract.extract(url)[2]
 
 
 class UrlNormalizer:
+    """Class to normalize URLs."""
 
     def __init__(self,
                  scheme=False,
@@ -64,6 +65,7 @@ class UrlNormalizer:
         self.fragment = fragment
 
     def normalize(self, url):
+        """Normalize a URL."""
         f = furl.furl(url)
         attrs = ("scheme", "username", "password", "port", "fragment",
                  "path", "params", "query")
@@ -101,7 +103,7 @@ class UrlNormalizer:
 
 
 def split_camel_case(string):
-    """ Split Word on Camel Case
+    """Split a camel cased word.
 
     Split word on internal uppercase letters, but allowing for sequences of
     all-caps letters.
@@ -120,5 +122,5 @@ def split_camel_case(string):
     `stackoverflow <https://stackoverflow.com/questions/29916065/how-to-do-camelcase-split-in-python>`__.
     answer.
 
-    """  # noqc
+    """  # noqa
     return [m.group(0) for m in re.finditer(_CAMEL_CASE_PATTERN, string)]
