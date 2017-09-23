@@ -1,9 +1,10 @@
+"""Utility functions and classes for working with SpaCy."""
 import logging
 import pickle
 from operator import attrgetter
 
 import spacy
-from spacy.tokens import Doc
+from spacy.tokens import Doc, Span
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ POS corresponding to closed class words in the
 
 
 def doc_copy(doc):
-    """ Create a copy of a Spacy document
+    """Create a copy of a Spacy document.
 
     Currently this serializes and deserializes the document to make a copy.
     I haven't figured out another way to do this.
@@ -78,7 +79,7 @@ def doc_copy(doc):
 
 
 def tok_spans(tok, spans):
-    """ Get any spans in which a token appears
+    """Get any spans in which a token appears.
 
     Parameters
     ----------
@@ -97,7 +98,7 @@ def tok_spans(tok, spans):
 
 
 def tok_ent(tok):
-    """ Get the entity in which a token appears
+    """Get the entity in which a token appears.
 
     Parameters
     ----------
@@ -115,7 +116,7 @@ def tok_ent(tok):
 
 
 def tok_noun_chunk(tok):
-    """ Get noun-chunk (if any) in which the token appears
+    """Get noun-chunk (if any) in which the token appears.
 
     Parameters
     ----------
@@ -133,7 +134,7 @@ def tok_noun_chunk(tok):
 
 
 def tok_sent(tok):
-    """ Get the sentence in which the token appears
+    """Get the sentence in which the token appears.
 
     Parameters
     ----------
@@ -151,7 +152,7 @@ def tok_sent(tok):
 
 
 def remove_leading(predicate, span):
-    """ Remove leading tokens from a span
+    """Remove leading tokens from a span.
 
     Drop leading tokens from a span as long as the predicate is true.
 
@@ -175,7 +176,7 @@ def remove_leading(predicate, span):
 
 
 def remove_trailing(predicate, span):
-    """ Remove trailing tokens from a span
+    """Remove trailing tokens from a span.
 
     Drop trailing tokens from a span as long as the predicate is true.
 
@@ -199,7 +200,7 @@ def remove_trailing(predicate, span):
 
 
 def spans_overlap(x, y):
-    """ Check if two spans overlap
+    """ Check if two spans overlap.
 
     Parameters
     ------------
@@ -216,7 +217,7 @@ def spans_overlap(x, y):
 
 
 def filter_overlapping_spans(spans):
-    """ Remove overlapping Spans
+    """Remove overlapping Spans.
 
 
     Parameters
@@ -239,7 +240,7 @@ def filter_overlapping_spans(spans):
 
 
 def merge_entities(doc):
-    """ Merge entities in-place
+    """Merge entities in-place.
 
     Parameters
     -----------
@@ -255,7 +256,7 @@ def merge_entities(doc):
 
 
 def merge_noun_chunks(doc):
-    """ Merge noun chunks in-place
+    """Merge noun chunks in-place
 
     Parameters
     -----------
@@ -271,7 +272,7 @@ def merge_noun_chunks(doc):
 
 
 def doc_to_tuple(doc, attrs=None):
-    """ Convert a SpaCy Document to a tokens, whitespac, attributes, array tuple
+    """Convert a SpaCy Document to a tokens, whitespac, attributes, array tuple
 
     The SpaCy document can be reconstructed from this information. It's also
     safer than the serialization method for SpaCy < 2.0.0, which has issues
@@ -307,25 +308,46 @@ def doc_from_tuple(vocab, x):
     return Doc(vocab, tokens, whitespace).from_array(attrs, array)
 
 
-def load_doc(vocab, file):
-    """ Load a picked :py:class:``~spacy.tokens.Doc` object an open file object ``file``
-
-    Parameters
-    -----------
-    vocab: :py:class:`spacy.vocab.Vocab`
-        The vocab used to create the pickled object
-    file: file
-        An open file object
-
-    Returns
-    --------
-    :py:class:`spacy.tokens.Doc`
-        A SpaCy document
-
-    """  # noqa
-    return doc_from_tuple(vocab, *pickle.load(file))
+def spans_subset(x, y):
+    """Check whether span x is a subset of span y."""
+    return (x.start >= y.start) and (x.end <= y.end)
 
 
-def loads_doc(vocab, bytes_object):
-    """ Load a picked :py:class:``~spacy.tokens.Doc` from a ``bytes`` object. """  # noqa
-    return doc_from_tuple(vocab, *pickle.loads(bytes_object))
+def spans_superset(x, y):
+    """Chec whether span x is a superset of span y."""
+    return (x.start < y.start) and (x.end > y.end)
+
+
+def span_before(x, y):
+    """Is span x immediately before span y."""
+    return (x.end == y.start)
+
+
+def span_after(x, y):
+    """Check whether span x is immediately after span y."""
+    return (x.end == y.start)
+
+
+def span_neighboring(x, y):
+    """Check whether span x is an immediate neighbor of span y."""
+    return span_before(x, y) or span_after(x, y)
+
+
+def span_union(x, y):
+    """Return a span with the union of span x and span y."""
+    # if not neighboring?
+    return Span(x.doc, min(x.start, y.start), max(x.end, y.end))
+
+
+def span_intersect(x, y):
+    """Return a span with intersection of span x and span y."""
+    if spans_overlap(x, y):
+        return Span(x.doc, max(x.start, y.start), min(x.end, y.end))
+
+
+def span_diff(x, y):
+    """Return a span with the difference of span x and span y."""
+    if not spans_overlap(x, y):
+        return x
+    else:
+        return Span(x.doc, max(x.start, y.start), min(x.end, y.end))
