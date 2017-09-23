@@ -1,25 +1,23 @@
 import logging
-from operator import attrgetter
 import pickle
+from operator import attrgetter
 
 import spacy
 from spacy.tokens import Doc
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_ATTRS = [spacy.attrs.HEAD,
-                 spacy.attrs.DEP,
-                 spacy.attrs.TAG,
-                 spacy.attrs.ENT_TYPE,
-                 spacy.attrs.ENT_IOB]
+DEFAULT_ATTRS = [
+    spacy.attrs.HEAD, spacy.attrs.DEP, spacy.attrs.TAG, spacy.attrs.ENT_TYPE,
+    spacy.attrs.ENT_IOB
+]
 """ Attributes needed to reconstruct a SpaCy parse """
 
 ENTITIES_TIME = ("DATE", "TIME")
-""" Time entities recognized by Spacy """
-
+""" Time entities recognized by SpaCy """
 
 ENTITIES_NUMERIC = ("PERCENT", "MONEY", "QUANTITY", "ORDINAL", "CARDINAL")
-""" Numeric entiies recognizd by Spacy """
+""" Numeric entiies recognizd by SpaCy """
 
 # Content words
 CONTENT_POS = ("ADJ", "ADV", "NOUN", "PROPN", "VERB")
@@ -55,7 +53,7 @@ POS corresponding to closed class words in the
 
 
 def doc_copy(doc):
-    """ Create a copy of a Spacy document
+    """Copy of a SpaCy document.
 
     Currently this serializes and deserializes the document to make a copy.
     I haven't figured out another way to do this.
@@ -66,12 +64,12 @@ def doc_copy(doc):
     Parameters
     ------------
     doc : :py:class:`~spacy.tokens.Doc`
-        Spacy document
+        SpaCy document
 
     Returns
     --------
     doc : :py:class:`~spacy.tokens.Doc`
-        Copy of the Spacy document
+        Copy of the SpaCy document
 
     """
     # There has to be a better way of doing it, but I can't figure out how
@@ -80,12 +78,12 @@ def doc_copy(doc):
 
 
 def tok_spans(tok, spans):
-    """ Get any spans in which a token appears
+    """Return any spans in which a token appears.
 
     Parameters
     ----------
     tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+        A SpaCy token
     spans: iterable
         An iterable yielding :py:class:`~spacy.tokens.Span` objects
 
@@ -99,12 +97,12 @@ def tok_spans(tok, spans):
 
 
 def tok_ent(tok):
-    """ Get the entity in which a token appears
+    """Return the entity in which a token appears.
 
     Parameters
     ----------
     tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+        A SpaCy token
 
     Returns
     --------
@@ -117,12 +115,12 @@ def tok_ent(tok):
 
 
 def tok_noun_chunk(tok):
-    """ Get noun-chunk (if any) in which the token appears
+    """Return the noun-chunk in which the token appears.
 
     Parameters
     ----------
     tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+        A SpaCy token
 
     Returns
     --------
@@ -135,12 +133,12 @@ def tok_noun_chunk(tok):
 
 
 def tok_sent(tok):
-    """ Get the sentence in which the token appears
+    """Return the sentence in which the token appears.
 
     Parameters
     ----------
     tok: :py:class:`~spacy.tokens.Token`
-        A Spacy token
+        A SpaCy token
 
     Returns
     --------
@@ -153,7 +151,7 @@ def tok_sent(tok):
 
 
 def remove_leading(predicate, span):
-    """ Remove leading tokens from a span
+    """Remove leading tokens from a span.
 
     Drop leading tokens from a span as long as the predicate is true.
 
@@ -177,7 +175,7 @@ def remove_leading(predicate, span):
 
 
 def remove_trailing(predicate, span):
-    """ Remove trailing tokens from a span
+    """Remove trailing tokens from a span.
 
     Drop trailing tokens from a span as long as the predicate is true.
 
@@ -201,12 +199,12 @@ def remove_trailing(predicate, span):
 
 
 def spans_overlap(x, y):
-    """ Check if two spans overlap
+    """Check if two spans overlap.
 
     Parameters
     ------------
     x, y: :class:`spacy.tokens.Span`
-        Spacy spans
+        SpaCy spans
 
     Returns
     --------
@@ -218,8 +216,7 @@ def spans_overlap(x, y):
 
 
 def filter_overlapping_spans(spans):
-    """ Remove overlapping Spans
-
+    """Remove overlapping spans.
 
     Parameters
     -----------
@@ -241,25 +238,24 @@ def filter_overlapping_spans(spans):
 
 
 def merge_entities(doc):
-    """ Merge entities in-place
+    """Merge entity spans in-place.
 
     Parameters
     -----------
     doc: :py:class:`~spacy.tokens.Doc`
         Merge named entities into tokens, in place.
+
     """
     for ent in doc.ents:
         try:
-            ent.merge(ent.root.tag_,
-                      ent.text,
-                      ent.root.ent_type_)
+            ent.merge(ent.root.tag_, ent.text, ent.root.ent_type_)
         except IndexError as e:
             LOGGER.exception("Unable to merge entity \"%s\"; skipping...",
                              ent.text)
 
 
 def merge_noun_chunks(doc):
-    """ Merge noun chunks in-place
+    """Merge noun chunks spans in-place.
 
     Parameters
     -----------
@@ -275,7 +271,7 @@ def merge_noun_chunks(doc):
 
 
 def doc_to_tuple(doc, attrs=None):
-    """ Convert a SpaCy Document to a tokens, whitespac, attributes, array tuple
+    """Convert a SpaCy document to a tuple.
 
     The SpaCy document can be reconstructed from this information. It's also
     safer than the serialization method for SpaCy < 2.0.0, which has issues
@@ -294,25 +290,23 @@ def doc_to_tuple(doc, attrs=None):
 
 
 def dump_doc(doc, file):
-    """ Pickle a :py:class:``~spacy.tokens.Doc` to an open file object ``file``
-    """  # noqa
+    """Pickle a SpaCy document and dump to a file-like object."""
     return pickle.dump(doc_to_tuple(doc), file)
 
 
 def dumps_doc(doc):
-    """ Pickle a :py:class:``~spacy.tokens.Doc` to a byte string """
+    """Pickle a a SpaCy document and return the byte-string."""
     return pickle.dumps(doc_to_tuple(doc))
 
 
 def doc_from_tuple(vocab, x):
-    """ SpaCy document from vocab and tokens, whitespace, attributes, array tuple
-    """  # noqa
+    """Create a SpaCy object from a tuple."""
     tokens, whitespace, attrs, array = x
     return Doc(vocab, tokens, whitespace).from_array(attrs, array)
 
 
 def load_doc(vocab, file):
-    """ Load a picked :py:class:``~spacy.tokens.Doc` object an open file object ``file``
+    """Load a pickled SpaCy object.
 
     Parameters
     -----------
@@ -331,5 +325,5 @@ def load_doc(vocab, file):
 
 
 def loads_doc(vocab, bytes_object):
-    """ Load a picked :py:class:``~spacy.tokens.Doc` from a ``bytes`` object. """  # noqa
+    """Load a pickled SpaCy object from a byte string."""
     return doc_from_tuple(vocab, *pickle.loads(bytes_object))
