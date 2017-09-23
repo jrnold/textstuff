@@ -1,6 +1,5 @@
 """Utility functions and classes for working with SpaCy."""
 import logging
-import pickle
 from operator import attrgetter
 
 import spacy
@@ -200,7 +199,7 @@ def remove_trailing(predicate, span):
 
 
 def spans_overlap(x, y):
-    """ Check if two spans overlap.
+    """Check if two spans overlap.
 
     Parameters
     ------------
@@ -219,7 +218,6 @@ def spans_overlap(x, y):
 def filter_overlapping_spans(spans):
     """Remove overlapping Spans.
 
-
     Parameters
     -----------
     spans: ``iterable`` of :class:`spacy.token.Span`
@@ -231,6 +229,7 @@ def filter_overlapping_spans(spans):
         An iterable of spans. Only non-overlapping spans are
         returned, with earlier spans taking precedence,
         after sorting the spans in increasing order.
+
     """
     i = -1
     for span in sorted(spans, attrgetter("start")):
@@ -246,6 +245,7 @@ def merge_entities(doc):
     -----------
     doc: :py:class:`~spacy.tokens.Doc`
         Merge named entities into tokens, in place.
+
     """
     for ent in doc.ents:
         try:
@@ -256,12 +256,13 @@ def merge_entities(doc):
 
 
 def merge_noun_chunks(doc):
-    """Merge noun chunks in-place
+    """Merge noun chunks in-place.
 
     Parameters
     -----------
     doc: :py:class:`~spacy.tokens.Doc`
         Merge named entities into tokens, in place.
+
     """
     for np in doc.noun_chunks:
         try:
@@ -269,43 +270,6 @@ def merge_noun_chunks(doc):
         except IndexError as e:
             LOGGER.exception("Unable to merge noun chunk \"%s\"; skipping ...",
                              np.text)
-
-
-def doc_to_tuple(doc, attrs=None):
-    """Convert a SpaCy Document to a tokens, whitespac, attributes, array tuple
-
-    The SpaCy document can be reconstructed from this information. It's also
-    safer than the serialization method for SpaCy < 2.0.0, which has issues
-    with unknown characters.
-    See this `issue <https://github.com/explosion/spaCy/issues/927>`__ for
-    more information.
-
-    The primary purpose of this function is to serialize SpaCy parsed docsuments.
-    SpaCy 2.0.0 introduces a new serialization method, at which point this will
-    be obsolete.
-    """  # noqa
-    attrs = attrs or DEFAULT_ATTRS
-    tokens = list(tok.text for tok in doc)
-    whitespace = list(len(tok.whitespace_) > 0 for tok in doc)
-    return (tokens, whitespace, attrs, doc.to_array(attrs))
-
-
-def dump_doc(doc, file):
-    """ Pickle a :py:class:``~spacy.tokens.Doc` to an open file object ``file``
-    """  # noqa
-    return pickle.dump(doc_to_tuple(doc), file)
-
-
-def dumps_doc(doc):
-    """ Pickle a :py:class:``~spacy.tokens.Doc` to a byte string """
-    return pickle.dumps(doc_to_tuple(doc))
-
-
-def doc_from_tuple(vocab, x):
-    """ SpaCy document from vocab and tokens, whitespace, attributes, array tuple
-    """  # noqa
-    tokens, whitespace, attrs, array = x
-    return Doc(vocab, tokens, whitespace).from_array(attrs, array)
 
 
 def spans_subset(x, y):
