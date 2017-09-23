@@ -1,13 +1,14 @@
-"""Convert SpaCy documents to formats."""
+"""Extract information for SpaCy documents into data frames."""
 import hashlib
-import re
 import sqlite3
 from collections import OrderedDict
 
 import pandas as pd
+from textacy.extract import direct_quotations, subject_verb_object_triples
 
 
 def _doc_hash(doc):
+    """Generate a unique ID for a SpaCy document from a hash of its text."""
     h = hashlib.sha1()
     h.update(doc.text.encode("utf-8"))
     return h.hexdigest()
@@ -34,32 +35,37 @@ def tokens_dict(doc, doc_id=None):
     doc_id = doc_id or _doc_hash(doc)
     for sid, sent in enumerate(doc.sents):
         for tok in sent:
-            yield OrderedDict(
-                (('doc_id', doc_id), ('sent', sid), ('i', tok.i),
-                 ('orth', tok.orth_), ('lemma', tok.lemma_), ('ent_iob',
-                                                              tok.ent_iob_),
-                 ('ent_type', tok.ent_type_), ('ent_id', tok.ent_id),
-                 ('shape', tok.shape_), ('pos', tok.pos_), ('tag', tok.tag_),
-                 ('head', tok.head.i), ('dep', tok.dep_), ('lang', tok.lang_),
-                 ('idx', tok.idx), ('whitespace',
-                                    tok.whitespace_), ('is_alpha',
-                                                       tok.is_alpha),
-                 ('is_ascii', tok.is_ascii), ('is_digit',
-                                              tok.is_digit), ('is_title',
-                                                              tok.is_title),
-                 ('is_punct', tok.is_punct), ('is_space',
-                                              tok.is_space), ('like_num',
-                                                              tok.like_num),
-                 ('like_email', tok.like_email), ('is_oov',
-                                                  tok.is_oov), ('is_stop',
-                                                                tok.is_stop)))
+            d = ((('doc_id', doc_id), ('sent', sid), ('i', tok.i), ('orth',
+                                                                    tok.orth_),
+                  ('lemma',
+                   tok.lemma_), ('ent_iob',
+                                 tok.ent_iob_), ('ent_type',
+                                                 tok.ent_type_), ('ent_id',
+                                                                  tok.ent_id),
+                  ('shape', tok.shape_), ('pos', tok.pos_), ('tag', tok.tag_),
+                  ('head', tok.head.i), ('dep', tok.dep_), ('lang', tok.lang_),
+                  ('idx', tok.idx), ('whitespace',
+                                     tok.whitespace_), ('is_alpha',
+                                                        tok.is_alpha),
+                  ('is_ascii', tok.is_ascii), ('is_digit',
+                                               tok.is_digit), ('is_title',
+                                                               tok.is_title),
+                  ('is_punct', tok.is_punct), ('is_space',
+                                               tok.is_space), ('like_num',
+                                                               tok.like_num),
+                  ('like_email', tok.like_email), ('is_oov',
+                                                   tok.is_oov), ('is_stop',
+                                                                 tok.is_stop)))
+            yield OrderedDict(d)
 
 
 def tokens_dataframe(doc, doc_id=None):
+    """Return a Pandas dataframe of token data."""
     return pd.DataFrame.from_records(list(tokens_dict(doc, doc_id=doc_id)))
 
 
 def ents_records(doc, doc_id=None):
+    """Yield dicts of named entities from a document."""
     doc_id = doc_id or _doc_hash(doc)
     for i, ent in enumerate(doc.ents):
         yield OrderedDict(
@@ -76,6 +82,7 @@ def ents_dataframe(doc, doc_id=None):
 
 
 def noun_chunks_records(doc, doc_id=None):
+    """Yield noun chunks from a document."""
     doc_id = doc_id or _doc_hash(doc)
     for i, chunk in enumerate(doc.noun_chunks):
         yield OrderedDict(
@@ -242,142 +249,91 @@ class ParsedCorpusDB:
             self.add_doc(id_, d, *args, **kwargs)
 
 
-def to_conll2003(doc, fs, fine_grained=True, ent_types=None, doc_start=False):
-    """Dump document to CONLL 2003 format."""
-    # There are no phrase chunks in SpaCy
-    if doc_start:
-        fs.write("\t".join(("-DOCSTART-", "-X-", "_", "O")) + "\n\n")
-    for i, sent in enumerate(doc.sents):
-        if i > 0:
-            fs.write("\n")
-        for tok in sent:
-            pos = tok.tag_ if fine_grained else tok.pos_
-            if tok.ent_iob_ != "O":
-                if not ent_types or tok.ent_type_ in ent_types:
-                    if (tok.i > 0 and tok.ent_iob_ == "B"
-                            and tok.doc[tok.i - 1].ent_type == tok.ent_type):
-                        iob = "B"
-                    else:
-                        iob = "I"
-                    iob = f"{iob}-{tok.ent_type_}"
-                else:
-                    iob = "O"
-            else:
-                iob = "O"
-            row = (tok.orth_, pos, "_", iob)
-            fs.write('\t'.join(row) + "\n")
+def word_vectors_to_df(vocab):
+    """Return a data frame of word vectors from a vocabulary."""
+    def f(lexeme):
+        if lexeme.vector_norm > 0:
+            return pd.DataFrame({
+                "word": lexeme.orth_,
+                "dim": list(range(lexeme.vector.shape[0])),
+                "value": lexeme.vector
+            })
+
+    return pd.concat((f(lexeme) for lexeme in vocab))
 
 
-def token_whitespace(doc):
-    """Yield (token, whitespace) tuples.
-
-    This ignores whitespace tokens, and adjusts the whitespace value
-    accordingly.
-
-    """
-    # this ignores whitespace tokens
-    space_pos = {
-        "SPACE",
-    }
-    for tok in doc:
-        if tok.pos_ not in space_pos:
-            if len(tok.whitespace_):
-                ws = True
-            else:
-                try:
-                    ws = doc[tok.i + 1].pos_ in space_pos
-                except IndexError:
-                    # space assumed at end of doc
-                    ws = True
-            yield (tok, ws)
+def doc_vector_to_df(doc, doc_id=None):
+    """Return a data frame of document word vectors."""
+    return pd.DataFrame({
+        "doc_id": doc_id,
+        "dim": list(range(doc.vector.shape[0])),
+        "value": doc.vector
+    })
 
 
-def _rep_val(x):
-    """Represent a value for CONLL formats."""
-    return "_" if x is None else str(x)
+def sent_vectors_to_df(doc, doc_id=None):
+    """Return a data frame of sentence word vectors from a document."""
+    def f(sent, sent_id, doc_id):
+        return pd.DataFrame({
+            "doc_id": doc_id,
+            "sent_id": sent_id,
+            "dim": list(range(sent.vector.shape[0])),
+            "value": doc.vector
+        })
+
+    return pd.concat(f(sent, i, doc_id) for i, sent in enumerate(doc.sents))
 
 
-# http://universaldependencies.org/format.html
-def to_conllu(doc,
-              fs,
-              sent_headers=True,
-              doc_text=True,
-              sent_ids=None,
-              doc_id=None):
-    """Dump Document to CONLL-U format."""
-    # fields = ("ID", "FORM", "LEMMA", "UPOSTAG", "XPOSTAG", "FEATS", "HEAD",
-    #           "DEPREL", "DEPS", "MISC")
-    if doc_text:
-        text = re.sub(r"\s+", " ", doc.text)
-        fs.write(f"# text = {text}\n\n")
-    for i, sent in enumerate(doc.sents):
-        if i > 0:
-            fs.write("\n")
-        if sent_headers:
-            fs.write(f"# sent_id = {i + 1}\n")
-            fs.write(f"# text = {sent.text}\n")
-        tokens = token_whitespace(sent)
-        for j, (tok, ws) in enumerate(tokens):
-            head = str(tok.head.i + 1)
-            feats = None
-            if ws:
-                misc = None
-            else:
-                misc = "SpacesAfter=No"
-            row = (j + 1, tok.orth_, tok.lemma_, tok.pos_, tok.tag_, feats,
-                   head, tok.dep_, misc)
-            fs.write('\t'.join(_rep_val(c) for c in row) + "\n")
+def svo_to_records(doc, doc_id=None):
+    """Yield records of subject, verb, object triples from a document."""
+    for sent_id, sent in enumerate(doc.sents):
+        for svo_id, (s, v, o) in enumerate(subject_verb_object_triples(sent)):
+            d = OrderedDict(
+                (("doc_id", doc_id), ("sent_id", sent_id), ("svo_id", svo_id),
+                 ("subject", s.text), ("subject_start",
+                                       s.start), ("subject_end", s.end),
+                 ("subject_tag", s.root.tag_), ("subject_ptag", ' '.join([
+                     t.tag_ for t in s
+                 ])), ("subject_pos", s.root.pos_), ("subject_ppos", ' '.join(
+                     [t.pos_
+                      for t in s])), ("subject_ent_type", s.root.ent_type_),
+                 ("verb", v.text), ("verb_start", v.start), ("verb_end",
+                                                             v.end),
+                 ("verb_tag", v.root.tag_), ("subject_ptag", ' '.join([
+                     t.tag_ for t in s
+                 ])), ("verb_pos", v.root.pos_), ("verb_ppos", ' '.join(
+                     [t.pos_ for t in s])), ("verb_dep",
+                                             v.root.dep_), ("verb", v.text),
+                 ("object", o.text), ("object_start", o.start), ("object_end",
+                                                                 o.end),
+                 ("object_tag", o.root.tag_), ("object_stag", ' '.join([
+                     t.tag_ for t in s
+                 ])), ("object_pos", o.root.pos_), ("object_spos", ' '.join(
+                     [t.pos_ for t in s])), ("object_ent_type",
+                                             o.root.ent_type_), ("object_dep",
+                                                                 o.root.dep_)))
+            yield d
 
 
-def to_conllx(doc, fs, sent_headers=True, doc_text=True, projective=True):
-    """Dump Document to CONLL-X 2006 format."""
-    for i, sent in enumerate(doc.sents):
-        if i > 0:
-            fs.write("\n")
-        for j, tok in enumerate(sent):
-            if tok.dep_ == "ROOT":
-                head = "0"
-            else:
-                head = str(tok.head.i + 1)
-            deprel = tok.dep_
-            #  is
-            if projective:
-                phead = head
-                pdeprel = deprel
-            else:
-                phead = None
-                pdeprel = None
-            # tokens are 1-indexed
-            row = (j + 1, tok.orth_, tok.lemma_, tok.pos_, tok.tag_, None,
-                   head, deprel, phead, pdeprel)
-            fs.write('\t'.join(_rep_val(x) for x in row) + "\n")
+def svo_to_dataframe(doc, doc_id=None):
+    """Return a data frame of subject, verb, object triples."""
+    return pd.DataFrame.from_records(svo_to_records(doc))
 
 
-def _next_tok(tok, i=1):
-    try:
-        return tok.doc[tok.i + i]
-    except IndexError:
-        return None
+def direct_quotations_to_records(doc, doc_id=None):
+    """Yield records of direct quotation from a document."""
+    for quotation_id, (speaker, rv,
+                       quote) in enumerate(direct_quotations(doc)):
+        d = OrderedDict(
+            (("doc_id", doc_id), ("quotation_id", quotation_id),
+             ("speaker", speaker.text), ("speaker_start", speaker.start),
+             ("speaker_end", speaker.end), ("rv", rv), ("rv_i", rv.i),
+             ("quote", quote), ("quote_start", quote.start), ("quote_end",
+                                                              quote.end)))
+        yield d
 
 
-def _prev_tok(tok, i=1):
-    try:
-        return tok.doc[tok.i - i]
-    except IndexError:
-        return None
-
-
-def to_bracket_ner(doc, fs):
-    """Dump document to bracket tagged NER format.
-
-    This is the output format of the
-    `Illinois tagger <https://github.com/danyaljj/illinois-cogcomp-nlp-1/tree/master/ner>`__.
-
-    """  # noqa
-    for tok in doc:
-        if tok.ent_iob_ == "B":
-            fs.write(f"[{tok.ent_type_} ")
-        elif tok.i > 0 and tok.ent_iob_ == "O":
-            if _prev_tok(tok).ent_iob_ != "O":
-                fs.write(" ] ")
-        fs.write(tok.text_with_ws)
+def direct_quotations_to_dataframe(doc, doc_id=None):
+    """Return a data frame with direct quotation from a data frame."""
+    return pd.DataFrame.from_records(
+        direct_quotations_to_records(doc, doc_id=doc_id))

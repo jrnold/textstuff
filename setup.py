@@ -1,7 +1,12 @@
+"""Setup scrtip for the textstuff package."""
 from setuptools import setup
 
+version = {}
+with open("./textstuff/version.py") as fp:
+    exec(fp.read(), version)
+
 setup(name='textstuff',
-      version='0.0.5',
+      version=version['__version__'],
       description='Miscellaneous functions for dealing with text data',
       url='http://github.com/jrnold/textstuff',
       author='Jeffrey B. Arnold',
