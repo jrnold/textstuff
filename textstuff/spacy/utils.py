@@ -234,7 +234,7 @@ def spans_overlap(x, y):
     return not (x.end > y.start or x.start > y.end)
 
 
-def filter_overlapping_spans(spans):
+def filter_overlapping_spans(spans, keep_longest=True):
     """Remove overlapping Spans.
 
     Parameters
@@ -251,10 +251,16 @@ def filter_overlapping_spans(spans):
 
     """
     i = -1
-    for span in sorted(spans, attrgetter("start")):
+    if keep_longest:
+        # by end, then shortest
+        sspans = sorted(spans, lambda x: (x.start, -x.end))
+    else:
+        # by start, then shortest
+        sspans = sorted(spans, lambda x: (x.start, x.end))
+    for span in sspans:
         if span.start > i:
             yield span
-            i = span.end
+            i = span.end - 1
 
 
 def merge_entities(doc):
