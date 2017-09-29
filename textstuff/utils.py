@@ -2,6 +2,10 @@
 import itertools
 import random
 import re
+<<<<<<< HEAD
+=======
+import furl
+>>>>>>> 2c1057db492da36f5c28cf437697b207ab49e4b3
 
 import email_normalize
 import tldextract
@@ -10,7 +14,7 @@ _CAMEL_CASE_PATTERN = r".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)"
 
 
 def normalize_email(email):
-    """ Normalize an email
+    """Normalize an email.
 
     Parameters
     ------------
@@ -26,27 +30,68 @@ def normalize_email(email):
     return email_normalize.normalize(email, resolve=False)
 
 
-def normalize_url(url):
-    """ Normalize a url
-
-    Normalize a url by returning only its domain.
-
-    Parameters
-    ----------
-    url: str
-        A url
-
-    Returns
-    --------
-    str
-        The url's domain
-
-    """
+def url_domain(url):
+    """Return the domain of a url."""
     return '.'.join(tldextract.extract(url)[1:])
 
 
+def url_tld(url):
+    """Return the top-level domain of a url."""
+    return tldextract.extract(url)[2]
+
+
+class UrlNormalizer:
+    """Class to normalize URLs."""
+
+    def __init__(self,
+                 scheme=False,
+                 username=False,
+                 password=False,
+                 host=True,
+                 subdomain=True,
+                 domain=True,
+                 tld=True,
+                 port=False,
+                 path=False,
+                 params=False,
+                 fragment=False,
+                 query=False):
+        self.scheme = scheme
+        self.username = username
+        self.password = password
+        self.host = host
+        self.subdomain = subdomain
+        self.domain = domain
+        self.tld = tld
+        self.port = port
+        self.path = path
+        self.query = query
+        self.params = params
+        self.fragment = fragment
+
+    def normalize(self, url):
+        """Normalize a URL."""
+        f = furl.furl(url)
+        attrs = ("scheme", "username", "password", "port", "fragment",
+                 "path", "params", "query")
+        for a in attrs:
+            if not self.__getattribute__(a):
+                setattr(f, a, None)
+        if self.host:
+            subdomain, domain, tld = tldextract.extract(f.host)
+            host = []
+            if self.subdomain:
+                host.append(subdomain)
+            if self.domain:
+                host.append(domain)
+            if self.tld:
+                host.append(tld)
+            f.host = '.'.join(host)
+        return f.url
+
+
 def split_camel_case(string):
-    """ Split Word on Camel Case
+    """Split a camel cased word.
 
     Split word on internal uppercase letters, but allowing for sequences of
     all-caps letters.
