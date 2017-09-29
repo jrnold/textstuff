@@ -1,6 +1,8 @@
 """Utility functions and classes for working with SpaCy."""
 import logging
-from operator import attrgetter
+from itertools import groupby
+from operator import itemgetter
+import re
 
 import spacy
 from spacy.tokens import Doc, Span
@@ -97,10 +99,38 @@ def find_spans(tok, spans):
     """
     if isinstance(tok, Span):
         tok = tok.root
-    return [(i, span) for i, span in enumerate(spans) if tok in span]
+    for i, span in enumerate(spans):
+        if tok in span:
+            yield (i, span)
 
 
-def find_end(tok):
+def find_first_span(tok, spans):
+    """Return the first span in which a token appears.
+
+    Parameters
+    ----------
+    tok: :class:`spacy.tokens.Token`, :class:`spacy.token.Span`
+        A SpaCy token or span. If ``tok`` is a span, then its root token is
+        used.
+    spans: iterable
+        An iterable yielding :py:class:`~spacy.tokens.Span` objects
+
+    Yields
+    --------
+    (int, :class:`spacy.tokens.Span`)
+        A tuple with the span number and span object for the first span in
+        which the token appears.
+
+    """
+    if isinstance(tok, Span):
+        tok = tok.root
+    try:
+        return next(find_spans(tok, spans))
+    except StopIteration:
+        return None
+
+
+def find_ent(tok):
     """Find the named entity span in which a token appears.
 
     Parameters
@@ -117,10 +147,12 @@ def find_end(tok):
         function returns ``None``.
 
     """
-    if tok.ent_iob_ == "O":
+    if isinstance(tok, Span):
+        tok = tok.root
+    if tok.ent_iob_ is None or tok.ent_iob_ == "O":
         return None
     else:
-        return list(find_spans(tok, tok.doc.ents))[0]
+        return find_first_span(tok, tok.doc.ents)
 
 
 def find_noun_chunk(tok):
@@ -140,10 +172,9 @@ def find_noun_chunk(tok):
         function returns ``None``.
 
     """
-    try:
-        return list(find_spans(tok, tok.doc.noun_chunks))[0]
-    except IndexError:
-        pass
+    if isinstance(tok, Span):
+        tok = tok.root
+    return find_first_span(tok, tok.noun_chunks)
 
 
 def find_sent(tok):
@@ -163,10 +194,9 @@ def find_sent(tok):
         function returns ``None``.
 
     """
-    try:
-        return list(find_spans(tok, tok.doc.sents))[0]
-    except IndexError:
-        pass
+    if isinstance(tok, Span):
+        tok = tok.root
+    return find_first_span(tok, tok.sents)
 
 
 def remove_leading(predicate, span):
@@ -378,3 +408,277 @@ def tokens_to_spans(tokens):
                 start = tok.i
                 end = tok.i
     return Span(tok.doc, start, end + 1)
+
+
+# Check whether tokens start spans
+
+def in_span(tok, spans):
+    """Is token ``tok`` in a span in ``spans``."""
+    return find_first_span(tok, spans) is not None
+
+
+def in_ent(tok):
+    """Is the token in an entity."""
+    return tok.ent_iob_ and tok.ent_iob_ != "O"
+
+
+def in_noun_chunk(tok, spans):
+    """Is token ``tok`` in a span in ``spans``."""
+    return find_first_span(tok, tok.doc.noun_chunks) is not None
+
+# since sentences either partition the doc or don't exist, no need for fun
+
+
+# Check whether tokens start spans
+
+def is_span_start(tok, spans):
+    """Does token start a span from an iterable in spans.
+
+    If ``tok`` is in multiple spans in ``Span``.
+
+    """
+    span = find_first_span(tok, spans)
+    if span is None:
+        return False
+    if isinstance(tok, Span):
+        return tok.start == span.start
+    else:
+        return tok.i == tok.start
+
+
+def is_ent_start(tok, spans):
+    """Does token start a named entity."""
+    if isinstance(tok, Span):
+        return tok.doc[tok.start] == "B"
+    else:
+        return tok.ent_iob_ == "B"
+
+
+def is_noun_chunk_start(tok, spans):
+    """Does token start a noun chunk."""
+    return is_span_start(tok, tok.doc.noun_chunks)
+
+
+def is_sent_start(tok, spans):
+    """Does token start a sentence."""
+    return is_span_start(tok, tok.doc.sents)
+
+
+def is_doc_start(tok):
+    """Does token start a document."""
+    if isinstance(tok, Span):
+        return tok.start == 0
+    else:
+        return tok.i == 0
+
+
+# Check whether tokens end spans
+
+def is_span_end(tok, span):
+    """Does token start a span from an iterable in spans.
+
+    If ``tok`` is in multiple spans in ``Span``.
+
+    """
+    if isinstance(tok, Span):
+        return tok.end == span.end
+    if span:
+        return tok.i == (span.end - 1)
+    return False
+
+
+def is_ent_end(tok):
+    """Does token end a named entity."""
+    if isinstance(tok, Span):
+        tok = tok.doc[tok.end]
+    if tok.ent_iob_ is None or tok.ent_iob_ == "O":
+        return False
+    else:
+        try:
+            return tok.nbor(1).ent_iob_ == "B"
+        except IndexError:  # end of document
+            return True
+
+
+def is_noun_chunk_end(tok):
+    """Does token start a noun chunk."""
+    _, span = find_first_span(tok, tok.doc.noun_chunks)
+    return is_span_end(tok, span)
+
+
+def is_sent_end(tok):
+    """Does token start a sentence."""
+    _, span = find_first_span(tok, tok.doc.sents)
+    return is_span_end(tok, span)
+
+
+def is_doc_end(tok):
+    """Does token start a document."""
+    if isinstance(tok, Span):
+        return tok.end == (len(tok.doc) - 1)
+    else:
+        return tok.i == (len(tok.doc) - 1)
+
+
+# Whitespace stuff
+
+def whitespace_after(tok):
+    """Does whitespace follow a token."""
+    if isinstance(tok, Span):
+        tok = tok.end
+    if len(tok.whitespace_) > 0:
+        return True
+    try:
+        return tok.nbor(1).pos_ == "SPACE"
+    except IndexError:  # end of doc
+        return False
+
+
+def whitespace_before(tok):
+    """Does whitespace occur before a token."""
+    if isinstance(tok, Span):
+        tok = tok.start
+    if tok.i == 0:  # start of doc
+        return False
+    prevtok = tok.nbor(-1)
+    return bool(len(prevtok.whitespace_)) or prevtok.pos_ == "SPACE"
+
+
+# Get word number within a span
+
+def span_token_i(tok, span):
+    """Token number within a span."""
+    if span is None:
+        return None
+    if isinstance(tok, Span):
+        return tok.start - span.start
+    else:
+        return tok.i - span.start
+
+
+def ent_token_i(tok):
+    """Token number within a named entity if in one."""
+    _, span = find_ent(tok)
+    return span_token_i(tok, span)
+
+
+def noun_chunk_token_i(tok):
+    """Token number within a span."""
+    _, span = find_noun_chunk(tok)
+    return span_token_i(tok, span)
+
+
+def sent_token_i(tok):
+    """Token number within a sentence."""
+    _, span = find_sent(tok)
+    return span_token_i(tok, span)
+
+# New lines
+
+
+_RE_NEWLINE = re.compile("\n", re.M)
+
+
+def new_line(tok):
+    """Is token a new line."""
+    # actually returns number of new-lines in a token
+    return sum(len(_RE_NEWLINE.findall(tok.orth_)))
+
+
+def is_line_start(tok):
+    """Is token at the start of a line."""
+    if isinstance(tok, Span):
+        tok = tok.doc[tok.start]
+    if tok.i == 0:
+        return True
+    else:
+        return bool(new_line(tok.nbor(-1)))
+
+
+def is_line_end(tok):
+    """Is token at the end of a line."""
+    if isinstance(tok, Span):
+        tok = tok.doc[tok.end]
+    if tok.i == (len(tok.doc) - 1):
+        return True
+    else:
+        return bool(new_line(tok.nbor(1)))
+
+
+def line_spans(doc):
+    """Yield spans for each line in a document."""
+    line_num = 0
+    start = None
+    end = None
+    new_line = True
+    for tok in doc:
+        if new_line:
+            start = tok.i  # using this means doc can be a span
+            new_line = False
+        if new_line(tok):
+            end = tok.i + 1
+            yield Span(doc, start, end, label=f"Line {linenum}")
+            line_num += 1
+            new_line = True
+    # return last line
+    return Span(doc, start, end, label=f"Line {linenum}")
+
+
+def find_line(tok):
+    """Return line of a token."""
+    return find_first_span(tok, line_spans(tok.doc))
+
+
+# Paragraphs
+
+
+_RE_PARA_TOKEN = re.compile("[\n]{2,}", re.M)
+
+
+def is_new_para(tok):
+    """Does the token start a paragraph."""
+    return _RE_PARA_TOKEN.search(tok.orth_) is not None
+
+
+def para_start(tok):
+    """Is the token the start of a paragraph."""
+    if isinstance(tok, Span):
+        tok = tok.doc[tok.start]
+    if tok.i == 0:
+        return True
+    else:
+        return is_new_para(tok.nbor(-1))
+
+
+def para_end(tok):
+    """Is the token the end of a paragraph."""
+    if isinstance(tok, Span):
+        tok = tok.doc[tok.end]
+    if tok.i == (len(tok.doc) - 1):
+        return True
+    else:
+        return is_new_para(tok.nbor(1))
+
+
+def para_spans(doc):
+    """Yield spans for each line in a document."""
+    para_num = 0
+    start = None
+    end = None
+    new_para = True
+    for tok in doc:
+        if new_para:
+            start = tok.i  # using this means doc can be a span
+            new_para = False
+        if is_new_para(tok):
+            end = tok.i + 1
+            yield Span(doc, start, end, label=f"Para {para_num}")
+            para_num += 0
+            new_para = True
+    # return last line
+    return Span(doc, start, end, label=f"Para {para_num}")
+
+
+def find_para(tok):
+    """Return paragraph of a token."""
+    return find_first_span(tok, para_spans(tok.doc))
