@@ -133,3 +133,86 @@ def shuffle_iterable(iterable, n=None):
         random.shuffle(queue)
         for el in queue:
             yield el
+
+
+def bio2biolu(iterable):
+    """Convert BIO tags to BILOU tags."""
+    it = iter(iterable)
+    current = None
+    lookahead = next(it)
+    empty = False
+    errmsg = "Only values of {'B', 'I', 'O'} are allowed."
+    while not empty:
+        current = lookahead
+        try:
+            lookahead = next(it)
+        except StopIteration:
+            if current == "O":
+                yield "O"
+            elif current == "B":
+                yield "U"
+            elif current == "I":
+                yield "L"
+            else:
+                raise ValueError(errmsg)
+            empty = True
+            continue
+        if current == "O":
+            if lookahead in {"B", "O"}:
+                yield "O"
+            elif lookahead == "I":
+                raise ValueError("'I' cannot follow 'O'.")
+            else:
+                raise ValueError(errmsg)
+        elif current == "B":
+            if lookahead in {"O", "B"}:
+                yield "U"
+            elif lookahead in {"I"}:
+                yield "B"
+            else:
+                raise ValueError(errmsg)
+        elif current == "I":
+            if lookahead == "I":
+                yield "I"
+            elif lookahead in {"O", "B"}:
+                yield "L"
+            else:
+                raise ValueError(errmsg)
+        else:
+            raise ValueError(errmsg)
+
+
+def biolu2bio(iterable):
+    """Convert BIOLU tags to BIO tags."""
+    it = iter(iterable)
+    lag = None
+    # TODO: maybe should test the validity of BILOU and not check for
+    # correctness
+    for x in it:
+        if x == "O":
+            if lag and lag not in {"L", "U", "O"}:
+                raise ValueError("'O' must follow 'L', 'U', or 'O'")
+            else:
+                yield "O"
+        elif x == "B":
+            if lag and lag not in {"L", "O", "U"}:
+                raise ValueError("'O' must follow 'L', 'U', or 'O'")
+            else:
+                yield "B"
+        elif x == "I":
+            if lag and lag not in {"B", "I"}:
+                raise ValueError("'O' must follow 'B', or 'I'")
+            else:
+                yield "I"
+        elif x in {"L"}:
+            if lag and lag not in {"B", "I"}:
+                raise ValueError("'L' must follow 'B', or 'I'")
+            else:
+                yield "L"
+        elif x in {"U"}:
+            if lag and lag not in {"L", "O", "U"}:
+                raise ValueError("'U' must follow 'L', 'O', or 'U'")
+            else:
+                yield "L"
+        else:
+            raise ValueError

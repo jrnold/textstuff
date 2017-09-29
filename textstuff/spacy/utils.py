@@ -1,7 +1,5 @@
 """Utility functions and classes for working with SpaCy."""
 import logging
-from itertools import groupby
-from operator import itemgetter
 import re
 
 import spacy
@@ -12,7 +10,7 @@ LOGGER = logging.getLogger(__name__)
 DEFAULT_ATTRS = [
     spacy.attrs.HEAD, spacy.attrs.DEP, spacy.attrs.TAG, spacy.attrs.ENT_TYPE,
     spacy.attrs.ENT_IOB
-]
+    ]
 """ Attributes needed to reconstruct a SpaCy parse """
 
 ENTITIES_TIME = ("DATE", "TIME")
