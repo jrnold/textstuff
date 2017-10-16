@@ -172,7 +172,7 @@ def find_noun_chunk(tok):
     """
     if isinstance(tok, Span):
         tok = tok.root
-    return find_first_span(tok, tok.noun_chunks)
+    return find_first_span(tok, tok.doc.noun_chunks)
 
 
 def find_sent(tok):
@@ -194,7 +194,7 @@ def find_sent(tok):
     """
     if isinstance(tok, Span):
         tok = tok.root
-    return find_first_span(tok, tok.sents)
+    return find_first_span(tok, tok.doc.sents)
 
 
 def remove_leading(predicate, span):
