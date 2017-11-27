@@ -1,6 +1,14 @@
-<<<<<<< HEAD
-from .utils import shuffle_iterable
+"""Corpora related classes and functions.
 
+This module includes several utility classes for use with the iterable
+corpora that :pkg:`gensim` functions uses as inputs.
+
+"""
+
+import itertools
+import random
+
+from .utils import shuffle_iterable
 
 class ShuffledCorpus:
     """ Return a corpus that is a shuffled version of input iterable ``corpus``
@@ -20,8 +28,10 @@ class ShuffledCorpus:
     corpus:
         A corpus as defined by :py:pkg:`~gensim`---an iterable that yields
         documents.
-    n: int, None
-        The size of the queue to use to shuffle elements.
+    max_docs:
+        The maximum number of documents to maintain in the queue.
+        A larger queue requires more memory, but also better shuffles
+        the corpus.
 
     """  # noqa
     def __init__(self, corpus, n=None):
@@ -29,22 +39,40 @@ class ShuffledCorpus:
             try:
                 len(corpus)
             except TypeError:
-                msg = "If n is None, then the corpus have a length."
+                msg = "If n is None, then the corpus must have a length."
                 raise ValueError(msg)
         self.corpus = corpus
 
     def __iter__(self):
-        for el in shuffle_iterable(self.corpus):
-=======
-"""Corpora related classes and functions.
+        """Iterate over shuffled elements from the corpus.
 
-This module includes several utility classes for use with the iterable
-corpora that :pkg:`gensim` functions uses as inputs.
+        Yields
+        -------
+        any
+            An element from ``corpus``.
 
-"""
+        """
+        it = iter(self.corpus)
+        queue = list(itertools.islice(it), self.max_docs)
+        # this could also go at the end, but this ensures that the initial
+        # order never matters, and we can sequentially iterate over the
+        # queue when finished
+        random.shuffle(queue)
+        not_empty = len(queue) >= self.max_docs
+        while not_empty:
+            i = random.randrange(self.max_docs)
+            yield queue[i]
+            try:
+                queue[i] = next(it)
+            except StopIteration:
+                # need to consume the yielded element
+                queue.pop(i)
+                not_empty = False
+        # don't need to shuffle since it is initially shuffled
+        for el in queue:
+            yield el
+            
 
-import itertools
-import random
 
 
 def _iterstep(iterable, step, start=0, repeat=None):
@@ -173,52 +201,3 @@ class SampleCorpus:
             if random.random() < self.p:
                 yield el
 
-
-class ShuffledCorpus:
-    """Return a corpus with shuffled elements."""
-
-    def __init__(self, corpus, max_docs=1):
-        """Create a new object.
-
-        Parameters
-        -----------
-        corpus:
-            An iterable, usually of the type used as a corpus in :pkg:`gensim`.
-        max_docs:
-            The maximum number of documents to maintain in the queue.
-            A larger queue requires more memory, but also better shuffles
-            the corpus.
-
-        """
-        self.corpora = corpus
-        self.max_docs = max_docs
-
-    def __iter__(self):
-        """Iterate over shuffled elements from the corpus.
-
-        Yields
-        -------
-        any
-            An element from ``corpus``.
-
-        """
-        it = iter(self.corpus)
-        queue = list(itertools.islice(it), self.max_docs)
-        # this could also go at the end, but this ensures that the initial
-        # order never matters, and we can sequentially iterate over the
-        # queue when finished
-        random.shuffle(queue)
-        not_empty = len(queue) >= self.max_docs
-        while not_empty:
-            i = random.randrange(self.max_docs)
-            yield queue[i]
-            try:
-                queue[i] = next(it)
-            except StopIteration:
-                # need to consume the yielded element
-                queue.pop(i)
-                not_empty = False
-        # don't need to shuffle since it is initially shuffled
-        for el in queue:
->>>>>>> 2c1057db492da36f5c28cf437697b207ab49e4b3
-            yield el
